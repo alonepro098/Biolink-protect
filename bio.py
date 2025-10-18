@@ -6,13 +6,18 @@ Channel: https://t.me/TeamXUpdate
 
 from pyrogram import Client, filters, errors
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatPermissions
+import time
+import re
 
 from helper.utils import (
     is_admin,
     get_config, update_config,
     increment_warning, reset_warnings,
-    is_whitelisted, add_whitelist, remove_whitelist, get_whitelist
+    is_whitelisted, add_whitelist, remove_whitelist, get_whitelist,
+    get_detection_enabled, get_penalty_duration
 )
+
+from helper.detector import has_link_in_bio
 
 from config import (
     API_ID,
@@ -60,11 +65,14 @@ async def help_handler(client: Client, message):
         "`/config` – set warn-limit & punishment mode\n"
         "`/free` – whitelist a user (reply or user/id)\n"
         "`/unfree` – remove from whitelist\n"
-        "`/freelist` – list all whitelisted users\n\n"
+        "`/freelist` – list all whitelisted users\n"
+        "`/status` – show current configuration\n"
+        "`/toggle` – enable/disable bio link scanning in this group\n"
+        "`/setduration <value>` – set penalty duration (e.g., 0, 30m, 2h, 1d)\n\n"
         "**When someone with a URL in their bio posts, I’ll:**\n"
         " 1. ⚠️ Warn them\n"
         " 2. 🔇 Mute if they exceed limit\n"
-        " 5. 🔨 Ban if set to ban\n\n"
+        " 3. 🔨 Ban if set to ban\n\n"
         "**Use the inline buttons on warnings to cancel or whitelist**"
     )
     kb = InlineKeyboardMarkup([
@@ -304,6 +312,9 @@ async def callback_handler(client: Client, callback_query):
 async def check_bio(client: Client, message):
     chat_id = message.chat.id
 
+    if not await get_detection_enabled(chat_id):
+        return
+
     # Skip service messages or bot messages
     if not message.from_user or message.from_user.is_bot:
         return
@@ -322,13 +333,16 @@ async def check_bio(client: Client, message):
     full_name = f"{user.first_name}{(' ' + user.last_name) if getattr(user, 'last_name', None) else ''}"
     mention = f"[{full_name}](tg://user?id={user_id})"
 
-    if URL_PATTERN.search(bio):
+    if has_link_in_bio(bio):
         try:
             await message.delete()
         except errors.MessageDeleteForbidden:
             return await message.reply_text("Please grant me delete permission.")
 
         mode, limit, penalty = await get_config(chat_id)
+        duration = await get_penalty_duration(chat_id)
+        until_date = int(time.time() + duration) if duration > 0 else None
+
         if mode == "warn":
             count = await increment_warning(chat_id, user_id)
             warning_text = (
@@ -347,11 +361,11 @@ async def check_bio(client: Client, message):
             if count >= limit:
                 try:
                     if penalty == "mute":
-                        await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False))
+                        await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False), until_date=until_date)
                         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Unmute ✅", callback_data=f"unmute_{user_id}")]])
                         await sent.edit_text(f"**{mention} has been 🔇 muted for [Link In Bio].**", reply_markup=kb)
                     else:
-                        await client.ban_chat_member(chat_id, user_id)
+                        await client.ban_chat_member(chat_id, user_id, until_date=until_date)
                         kb = InlineKeyboardMarkup([[InlineKeyboardButton("Unban ✅", callback_data=f"unban_{user_id}")]])
                         await sent.edit_text(f"**{mention} has been 🔨 banned for [Link In Bio].**", reply_markup=kb)
                 
@@ -360,17 +374,145 @@ async def check_bio(client: Client, message):
         else:
             try:
                 if mode == "mute":
-                    await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False))
+                    await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False), until_date=until_date)
                     kb = InlineKeyboardMarkup([[InlineKeyboardButton("Unmute", callback_data=f"unmute_{user_id}")]])
                     await message.reply_text(f"{mention} has been 🔇 muted for [Link In Bio].", reply_markup=kb)
                 else:
-                    await client.ban_chat_member(chat_id, user_id)
+                    await client.ban_chat_member(chat_id, user_id, until_date=until_date)
                     kb = InlineKeyboardMarkup([[InlineKeyboardButton("Unban", callback_data=f"unban_{user_id}")]])
                     await message.reply_text(f"{mention} has been 🔨 banned for [Link In Bio].", reply_markup=kb)
             except errors.ChatAdminRequired:
                 return await message.reply_text(f"I don't have permission to {mode} users.")
     else:
         await reset_warnings(chat_id, user_id)
+
+def _parse_duration(arg: str) -> int:
+    s = arg.strip().lower()
+    if s.isdigit():
+        return int(s)
+    m = re.match(r"^(\d+)\s*([smhdw])$", s)
+    if not m:
+        raise ValueError("Invalid duration format")
+    val = int(m.group(1))
+    unit = m.group(2)
+    return {
+        "s": val,
+        "m": val * 60,
+        "h": val * 3600,
+        "d": val * 86400,
+        "w": val * 604800,
+    }[unit]
+
+
+@app.on_message(filters.group & filters.command("status"))
+async def status_handler(client: Client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    if not await is_admin(client, chat_id, user_id):
+        return
+
+    mode, limit, penalty = await get_config(chat_id)
+    detection = await get_detection_enabled(chat_id)
+    duration = await get_penalty_duration(chat_id)
+
+    text = (
+        "**🔧 Current Configuration**\\n\\n"
+        f"• Detection: {'Enabled' if detection else 'Disabled'}\\n"
+        f"• Mode: {mode}\\n"
+        f"• Warning Limit: {limit}\\n"
+        f"• Penalty: {penalty}\\n"
+        f"• Penalty Duration: {duration if duration > 0 else 'Permanent'}\\n"
+    )
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"🗑️ Close\", callback_data=\"close\")]])
+    await client.send_message(chat_id, text, reply_markup=kb)
+
+
+@app.on_message(filters.group & filters.command("toggle"))
+async def toggle_handler(client: Client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    if not await is_admin(client, chat_id, user_id):
+        return
+
+    current = await get_detection_enabled(chat_id)
+    new_val = not current
+    await update_config(chat_id, detection_enabled=new_val)
+    await client.send_message(chat_id, f\"**Detection {'Enabled' if new_val else 'Disabled'}**\")
+
+
+@app.on_message(filters.group & filters.command("setduration"))
+async def setduration_handler(client: Client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    if not await is_admin(client, chat_id, user_id):
+        return
+
+    if len(message.command) < 2:
+        return await client.send_message(chat_id, \"**Usage:** /setduration <seconds|30m|2h|1d|0>\")
+
+    arg = message.command[1]
+    try:
+        seconds = _parse_duration(arg)
+    except Exception:
+        return await client.send_message(chat_id, \"**Invalid duration. Use seconds or 30m / 2h / 1d / 0.**\")
+
+    await update_config(chat_id, penalty_duration=seconds)
+    await client.send_message(chat_id, f\"**Penalty duration set to {seconds if seconds>0 else 'Permanent'}**\")
+
+
+@app.on_message(filters.group & filters.new_chat_members)
+async def new_member_scan(client: Client, message):
+    chat_id = message.chat.id
+
+    if not await get_detection_enabled(chat_id):
+        return
+
+    for user in message.new_chat_members:
+        if user.is_bot:
+            continue
+
+        user_id = user.id
+        if await is_admin(client, chat_id, user_id) or await is_whitelisted(chat_id, user_id):
+            continue
+
+        try:
+            u = await client.get_users(user_id)
+        except Exception:
+            u = await client.get_chat(user_id)
+
+        bio = getattr(u, \"bio\", \"\") or \"\"
+        full_name = f\"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}\"
+        mention = f\"[{full_name}](tg://user?id={user_id})\"
+
+        if has_link_in_bio(bio):
+            mode, limit, penalty = await get_config(chat_id)
+            duration = await get_penalty_duration(chat_id)
+            until_date = int(time.time() + duration) if duration > 0 else None
+
+            try:
+                if mode == \"warn\":
+                    count = await increment_warning(chat_id, user_id)
+                    warning_text = (
+                        \"**🚨 Warning Issued (On-Join)** 🚨\\n\\n\"
+                        f\"👤 **User:** {mention} `[{user_id}]`\\n\"
+                        \"❌ **Reason:** URL found in bio\\n\"
+                        f\"⚠️ **Warning:** {count}/{limit}\\n\\n\"
+                        \"**Notice: Please remove any links from your bio.**\"
+                    )
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"🗑️ Close\", callback_data=\"close\")]])
+                    await client.send_message(chat_id, warning_text, reply_markup=kb)
+                else:
+                    if mode == \"mute\":
+                        await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False), until_date=until_date)
+                        kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"Unmute\", callback_data=f\"unmute_{user_id}\")]])
+                        await client.send_message(chat_id, f\"{mention} has been 🔇 muted for [Link In Bio].\", reply_markup=kb)
+                    else:
+                        await client.ban_chat_member(chat_id, user_id, until_date=until_date)
+                        kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"Unban\", callback_data=f\"unban_{user_id}\")]])
+                        await client.send_message(chat_id, f\"{mention} has been 🔨 banned for [Link In Bio].\", reply_markup=kb)
+            except errors.ChatAdminRequired:
+                await client.send_message(chat_id, \"I don't have sufficient admin permissions.\")
+
 
 if __name__ == "__main__":
     app.run()

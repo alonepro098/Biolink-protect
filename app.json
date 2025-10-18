@@ -37,6 +37,14 @@
     "MONGO_URI": {
       "description": "Your MongoDB connection string (e.g., from MongoDB Atlas)",
       "required": true
+    },
+    "DETECTION_ENABLED": {
+      "description": "Enable bio link detection by default (true/false)",
+      "required": false
+    },
+    "DEFAULT_PENALTY_DURATION": {
+      "description": "Default penalty duration in seconds (0 for permanent)",
+      "required": false
     }
   },
   "addons": [],

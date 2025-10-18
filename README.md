@@ -9,18 +9,27 @@
 </p>
 
 <p align="center">
-  <em>BioLink Protector is a Telegram bot Script that automatically monitors user bios in group chats for links. If a link is found in a user's bio, the bot can warn the user, mute them, or ban them based on configurable settings. This bot helps maintain a clean and safe environment in your Telegram group chats.
-</em>
+  <em>BioLink Protector is a Telegram bot that automatically monitors user bios in group chats for links. If a link is found, the bot can warn, mute, or ban based on configurable settings—helping maintain a clean and safe environment.</em>
 </p>
 <hr>
 
+## What's New
+
+- More reliable link detection using normalization + linkify-it (handles obfuscations like `hxxp`, `[dot]`, Unicode confusables, bare domains).
+- Scans bios both on message and when users join the group.
+- Configurable penalty duration (temporary mute/ban) with `/setduration`, or permanent by setting to `0`.
+- Toggle detection per group with `/toggle` and view config with `/status`.
+- Faster admin checks with caching; reduces API calls, better performance on large groups.
+- Works 24×7 on any VPS (tested on Python 3.12), and deployable to Heroku or Render.
+
 ## Features
 
-- Automatically checks user bios for links when they send a message in the group.
-- Configurable **warnings**, **mutes**, and **bans** for users with links in their bios.
-- **Whitelist** & **Unwhitelist** trusted members  
-- **Cancel Warning** reset a user’s warnings  
-- **Admin-only controls** with interactive inline keyboards
+- Auto-scan bios for links when users post.
+- Configurable **warnings**, **mutes**, **bans**.
+- **Whitelist** & **Unwhitelist** trusted members.
+- **Cancel Warning** to reset a user’s warnings.
+- **Admin-only controls** with interactive inline keyboards.
+- On-join scanning to catch link-in-bio before users post.
 
 ## 🎮 Demo Bot
 
@@ -28,9 +37,9 @@ Try it live: [@LinkXdetectorBot](https://t.me/LinkXdetectorBot)
 
 ## Requirements
 
-Before you begin, ensure you have met the following requirements:
-
-- Python 3.8 or higher
+- Python 3.8+ (recommended 3.12)
+- MongoDB (Atlas or self-hosted)
+- Environment variables: `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGO_URI`
 
 ## Installation
 
@@ -38,37 +47,73 @@ Before you begin, ensure you have met the following requirements:
 git clone https://github.com/strad-dev131/BioLink-Protector
 cd BioLink-Protector
 pip install -r requirements.txt
-
 ```
 
 ## Configuration
 
-1. Open the `config.py` file in your favorite text editor.  
-2. Replace the placeholders for `API_ID`, `API_HASH`, `BOT_TOKEN`, and `MONGO_URI` with your actual values:  
-   - **`API_ID`**: Your API ID from [my.telegram.org](https://my.telegram.org).  
-   - **`API_HASH`**: Your API Hash from [my.telegram.org](https://my.telegram.org).  
-   - **`BOT_TOKEN`**: The token you obtained from [@BotFather](https://t.me/BotFather).  
-   - **`MONGO_URI`**: Your MongoDB connection string (e.g., from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)).  
+Set environment variables or edit `config.py`:
 
-## Deploy the Bot
+- `API_ID` / `API_HASH` from [my.telegram.org](https://my.telegram.org)
+- `BOT_TOKEN` from [@BotFather](https://t.me/BotFather)
+- `MONGO_URI` MongoDB connection string
+- Optional defaults:
+  - `DETECTION_ENABLED` (default: true)
+  - `DEFAULT_PENALTY_DURATION` in seconds (default: 0 for permanent)
 
+## Deploy
+
+### Run locally / VPS
 ```sh
 python bio.py
 ```
 
+To run 24×7 on a VPS, use `systemd`:
+```
+[Unit]
+Description=BioLink Protector Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/biolink-protector
+ExecStart=/usr/bin/python3 /opt/biolink-protector/bio.py
+Restart=always
+Environment=API_ID=...
+Environment=API_HASH=...
+Environment=BOT_TOKEN=...
+Environment=MONGO_URI=...
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Heroku
+- Push this repo to Heroku.
+- Set env vars in the app settings: `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGO_URI`.
+- Procfile runs: `worker: python bio.py`.
+
+### Render
+- Create a new Web Service.
+- Runtime: Python.
+- Start command: `python bio.py`.
+- Set env vars: `API_ID`, `API_HASH`, `BOT_TOKEN`, `MONGO_URI`.
+
 ## Usage
 
-1. Add the bot to your group.  
-2. Grant the bot **Admin** rights (delete & restrict).  
-3. In-chat commands (admins only):  
-   - `/config` → choose “Warn”, “Mute”, or “Ban” and set warn count  
-   - `/free [reply|id]` → whitelist a user  
-   - `/unfree [reply|id]` → remove from whitelist  
-   - `/freelist` → view all whitelisted users  
-4. **Auto-scan:** When a non-whitelisted user posts, their bio is checked—warn/mute/ban applies.  
+Admin commands:
+- `/config` → choose “Warn”, “Mute”, or “Ban” and set warn count
+- `/free [reply|id]` → whitelist a user
+- `/unfree [reply|id]` → remove from whitelist
+- `/freelist` → view all whitelisted users
+- `/status` → show current configuration
+- `/toggle` → enable/disable bio scanning
+- `/setduration <seconds|30m|2h|1d|0>` → temporary or permanent penalty duration
 
+Auto-scan:
+- When a non-whitelisted user posts, their bio is checked—warn/mute/ban applies.
+- New members’ bios are checked on join.
 
-✨ **Note**: Fork this repo, & Star ☀️ the repo if you liked it. and Share this repo with Proper Credit
+✨ **Note**: Fork + Star the repo if you liked it, and share with proper credit.
 
 ## Author
 
