@@ -478,26 +478,34 @@ async def new_member_scan(client: Client, message):
         try:
             u = await client.get_users(user_id)
         except Exception:
-            u = await client.get_chat(user_id)
+    u = await client.get_chat(user_id)
 
-        bio = getattr(u, "bio", "") or ""
-        full_name = f"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}"
+bio = getattr(u, "bio", "") or ""
+full_name = f"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}"
 mention = f"[{full_name}](tg://user?id={user_id})"
-        if has_link_in_bio(bio):
-            mode, limit, penalty = await get_config(chat_id)
-            duration = await get_penalty_duration(chat_id)
-            until_date = int(time.time() + duration) if duration > 0 else None
 
-            try:
-    if mode == "warn":
-        count = await increment_warning(chat_id, user_id)
-        warning_text = (
-            "**🚨 Warning Issued (On-Join)** 🚨\n\n"
-            f"👤 **User:** {mention} `[{user_id}]`\n"
-            "❌ **Reason:** URL found in bio\n"
-            f"⚠️ **Warning:** {count}/{limit}\n\n"
-            "**Notice: Please remove any links from your bio.**"
-        )
+if has_link_in_bio(bio):
+    mode, limit, penalty = await get_config(chat_id)
+    duration = await get_penalty_duration(chat_id)
+    until_date = int(time.time() + duration) if duration > 0 else None
+
+    try:
+        if mode == "warn":
+            count = await increment_warning(chat_id, user_id)
+
+            warning_text = (
+                "**🚨 Warning Issued (On-Join)** 🚨\n\n"
+                f"👤 **User:** {mention} `[{user_id}]`\n"
+                "❌ **Reason:** URL found in bio\n"
+                f"⚠️ **Warning:** {count}/{limit}\n\n"
+                "**Notice: Please remove any links from your bio.**"
+            )
+
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🗑️ Close", callback_data="close")]
+            ])
+
+            await client.send_message(chat_id, warning_text, reply_markup=kb)
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🗑️ Close", callback_data="close")]
         ])
