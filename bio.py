@@ -458,8 +458,7 @@ async def setduration_handler(client: Client, message):
         return await client.send_message(chat_id, "**Invalid duration. Use seconds or 30m / 2h / 1d / 0.**")
         
     await update_config(chat_id, penalty_duration=seconds)
-    await client.send_message(chat_id, f\"**Penalty duration set to {seconds if seconds>0 else 'Permanent'}**\")
-
+    await client.send_message(chat_id, f"**Penalty duration set to {seconds if seconds > 0 else 'Permanent'}**")
 
 @app.on_message(filters.group & filters.new_chat_members)
 async def new_member_scan(client: Client, message):
