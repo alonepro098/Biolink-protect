@@ -480,7 +480,7 @@ async def new_member_scan(client: Client, message):
         except Exception:
             u = await client.get_chat(user_id)
 
-        bio = getattr(u, \"bio\", \"\") or \"\"
+        bio = getattr(u, "bio", "") or ""
         full_name = f\"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}\"
         mention = f\"[{full_name}](tg://user?id={user_id})\"
 
