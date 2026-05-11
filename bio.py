@@ -414,17 +414,20 @@ async def status_handler(client: Client, message):
     mode, limit, penalty = await get_config(chat_id)
     detection = await get_detection_enabled(chat_id)
     duration = await get_penalty_duration(chat_id)
+text = (
+    "**🔧 Current Configuration**\n\n"
+    f"• Detection: {'Enabled' if detection else 'Disabled'}\n"
+    f"• Mode: {mode}\n"
+    f"• Warning Limit: {limit}\n"
+    f"• Penalty: {penalty}\n"
+    f"• Penalty Duration: {duration if duration > 0 else 'Permanent'}\n"
+)
 
-    text = (
-        "**🔧 Current Configuration**\\n\\n"
-        f"• Detection: {'Enabled' if detection else 'Disabled'}\\n"
-        f"• Mode: {mode}\\n"
-        f"• Warning Limit: {limit}\\n"
-        f"• Penalty: {penalty}\\n"
-        f"• Penalty Duration: {duration if duration > 0 else 'Permanent'}\\n"
-    )
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"🗑️ Close\", callback_data=\"close\")]])
-    await client.send_message(chat_id, text, reply_markup=kb)
+kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🗑️ Close", callback_data="close")]
+])
+
+await client.send_message(chat_id, text, reply_markup=kb)
 
 
 @app.on_message(filters.group & filters.command("toggle"))
