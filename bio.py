@@ -450,8 +450,7 @@ async def setduration_handler(client: Client, message):
         return
 
     if len(message.command) < 2:
-        return await client.send_message(chat_id, \"**Usage:** /setduration <seconds|30m|2h|1d|0>\")
-
+        return await client.send_message(chat_id, "**Usage:** /setduration <seconds|30m|2h|1d|0>")
     arg = message.command[1]
     try:
         seconds = _parse_duration(arg)
