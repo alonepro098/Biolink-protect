@@ -481,37 +481,58 @@ async def new_member_scan(client: Client, message):
             u = await client.get_chat(user_id)
 
         bio = getattr(u, "bio", "") or ""
-        full_name = f\"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}\"
-        mention = f\"[{full_name}](tg://user?id={user_id})\"
-
+        full_name = f"{u.first_name}{(' ' + u.last_name) if getattr(u, 'last_name', None) else ''}"
+mention = f"[{full_name}](tg://user?id={user_id})"
         if has_link_in_bio(bio):
             mode, limit, penalty = await get_config(chat_id)
             duration = await get_penalty_duration(chat_id)
             until_date = int(time.time() + duration) if duration > 0 else None
 
             try:
-                if mode == \"warn\":
-                    count = await increment_warning(chat_id, user_id)
-                    warning_text = (
-                        \"**🚨 Warning Issued (On-Join)** 🚨\\n\\n\"
-                        f\"👤 **User:** {mention} `[{user_id}]`\\n\"
-                        \"❌ **Reason:** URL found in bio\\n\"
-                        f\"⚠️ **Warning:** {count}/{limit}\\n\\n\"
-                        \"**Notice: Please remove any links from your bio.**\"
-                    )
-                    kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"🗑️ Close\", callback_data=\"close\")]])
-                    await client.send_message(chat_id, warning_text, reply_markup=kb)
-                else:
-                    if mode == \"mute\":
-                        await client.restrict_chat_member(chat_id, user_id, ChatPermissions(can_send_messages=False), until_date=until_date)
-                        kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"Unmute\", callback_data=f\"unmute_{user_id}\")]])
-                        await client.send_message(chat_id, f\"{mention} has been 🔇 muted for [Link In Bio].\", reply_markup=kb)
-                    else:
-                        await client.ban_chat_member(chat_id, user_id, until_date=until_date)
-                        kb = InlineKeyboardMarkup([[InlineKeyboardButton(\"Unban\", callback_data=f\"unban_{user_id}\")]])
-                        await client.send_message(chat_id, f\"{mention} has been 🔨 banned for [Link In Bio].\", reply_markup=kb)
-            except errors.ChatAdminRequired:
-                await client.send_message(chat_id, \"I don't have sufficient admin permissions.\")
+    if mode == "warn":
+        count = await increment_warning(chat_id, user_id)
+        warning_text = (
+            "**🚨 Warning Issued (On-Join)** 🚨\n\n"
+            f"👤 **User:** {mention} `[{user_id}]`\n"
+            "❌ **Reason:** URL found in bio\n"
+            f"⚠️ **Warning:** {count}/{limit}\n\n"
+            "**Notice: Please remove any links from your bio.**"
+        )
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🗑️ Close", callback_data="close")]
+        ])
+        await client.send_message(chat_id, warning_text, reply_markup=kb)
+
+    else:
+        if mode == "mute":
+            await client.restrict_chat_member(
+                chat_id,
+                user_id,
+                ChatPermissions(can_send_messages=False),
+                until_date=until_date
+            )
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Unmute", callback_data=f"unmute_{user_id}")]
+            ])
+            await client.send_message(
+                chat_id,
+                f"{mention} has been 🔇 muted for [Link In Bio].",
+                reply_markup=kb
+            )
+
+        else:
+            await client.ban_chat_member(chat_id, user_id, until_date=until_date)
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Unban", callback_data=f"unban_{user_id}")]
+            ])
+            await client.send_message(
+                chat_id,
+                f"{mention} has been 🔨 banned for [Link In Bio].",
+                reply_markup=kb
+            )
+
+except errors.ChatAdminRequired:
+    await client.send_message(chat_id, "I don't have sufficient admin permissions.")
 
 
 if __name__ == "__main__":
