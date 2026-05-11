@@ -440,8 +440,7 @@ async def toggle_handler(client: Client, message):
     current = await get_detection_enabled(chat_id)
     new_val = not current
     await update_config(chat_id, detection_enabled=new_val)
-    await client.send_message(chat_id, f\"**Detection {'Enabled' if new_val else 'Disabled'}**\")
-
+await client.send_message(chat_id, f"**Detection {'Enabled' if new_val else 'Disabled'}**")
 
 @app.on_message(filters.group & filters.command("setduration"))
 async def setduration_handler(client: Client, message):
